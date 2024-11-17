@@ -1,0 +1,333 @@
+---
+title: "Analysis of U.S. Flight Data from January-April 2008"
+subtitle: "Shiny plots"
+format:
+  revealjs: 
+    # embed-resources: true
+    slide-number: true
+    chalkboard: 
+      buttons: false
+    preview-links: auto
+    css: styles.css
+server: shiny
+runtime: shiny
+---
+
+## Distribution of different airlines
+
+```{r}
+#| context: setup
+library(dplyr)
+library(ggplot2)
+library(RSQLite)
+library(stringr)
+library(nortest)
+library(MASS)
+## notice setwd! notice setwd! notice setwd!
+
+setwd("C:/Users/78641/Downloads")
+con <- dbConnect(RSQLite::SQLite(), "final_project.db")
+Query_data="SELECT Origin,Dest,Deptime,DepDelay,airline
+            FROM main_data"
+#WHERE Origin IN ('SGU','PSC','RAP','IPL','SUN')
+result= dbGetQuery(con, Query_data)
+dbDisconnect(con)
+
+result= na.omit(result)
+select_origin= function(data,level){
+  c= list()
+  for (i in 1:length(level)){
+  c[[i]]= data[which(data$Origin== level[i]),]
+  }
+  return(c)
+}
+
+get_dest= function(data){
+  level= levels(factor(data$Dest))
+  p=list()
+  for (i in 1:length(level)){
+  p[[i]]<- data[which(data$Dest== level[i]),]
+  }
+  return(p)
+}
+
+level_1 = levels(factor(result$Origin))
+level_origin= select_origin(result,level_1)
+level_dest_matched_byorigin=list()
+level_2= list()
+for (i in 1:length(level_1)){
+  level_dest_matched_byorigin[[i]]= get_dest(data.frame(level_origin[[i]]))
+  level_2[[i]]= levels(factor(data.frame(level_origin[[i]])$Dest))
+}
+
+
+df = function(origin,dest){
+  find_origin = which(level_1== origin)
+  get_data = level_dest_matched_byorigin[[find_origin]]
+  find_dest = which(level_2[[find_origin]] == dest)
+  then_data=  data.frame(get_data[find_dest])
+  mean_var_data = then_data %>%
+    summarize(Dep_mean = mean(DepDelay),Dep_var= var(DepDelay))
+  final_data= data.frame(Origin=c(origin),Dest=c(dest))
+  final_data$Dep_mean= mean_var_data$Dep_mean
+  final_data$Dep_var= mean_var_data$Dep_var
+  #calculate on-time performance
+  Dep_deley= then_data$DepDelay
+  count=0
+  for (i in 1:length(Dep_deley)){
+    if (abs(Dep_deley[i]-final_data$Dep_mean)<=sqrt(final_data$Dep_var)){
+      count= count+1
+    }
+  }
+  final_data$on_time_performance=count/length(Dep_deley)
+  density= density(then_data$DepDelay[which(then_data$DepDelay<100)])
+  plot(density,main="density plot",
+       xlab="Data of departure delay",
+       ylab="Density")
+  polygon(density, col = "blue", border = "black", density = 100)
+  conf_interval <- quantile(then_data$DepDelay, c(0.05, 0.95))
+  abline(v= conf_interval[1], col = "red", lty = 5)
+  abline(v= conf_interval[2], col = "red", lty = 5)
+  return(final_data)
+}
+level1= data.frame(origin=level_1)
+level2= level_2
+```
+
+```{r}
+#| panel: fill
+plotOutput('myPlot')
+```
+
+::: {style="font-size: 40%"}
+```{r}
+selectInput("category", "Select Origin", choices = level1$origin)
+selectInput("subcategory", "Select Destination", choices = NULL)
+```
+:::
+
+```{r}
+#| context: server
+ 
+  
+ selected_category <- reactive({
+    input$category
+
+  })
+
+
+  subcategory_choices <- reactive({
+    find_origin <- which(level1$origin == selected_category())
+    level2[[find_origin]]
+  })
+  
+ observe({
+    updateSelectInput(session, "subcategory", choices = subcategory_choices())
+  })
+  
+  
+  level_dest_matched_byorigin_reactive <- reactiveVal(level_dest_matched_byorigin)
+  level2_reactive <- reactiveVal(level2)
+  
+  # Render the plot
+      output$myPlot <- renderPlot({
+find_origin <- which(level1$origin == selected_category())
+    selected_dest <- input$subcategory
+    find_dest = which(level2_reactive()[[find_origin]] == selected_dest)
+    # Filter data based on selected category and subcategory
+    filtered_data <- level_dest_matched_byorigin_reactive()[[find_origin]]
+    filtered_data <- data.frame(filtered_data[find_dest])
+    # Create a simple scatter plot
+    density= density(filtered_data$DepDelay[which(filtered_data$DepDelay<100)])
+    plot(density,main="density plot",
+       xlab="Data of departure delay",
+       ylab="Density")
+    polygon(density, col = "blue", border = "black", density = 100)
+    conf_interval <- quantile(filtered_data$DepDelay, c(0.05, 0.95))
+    abline(v= conf_interval[1], col = "red", lty = 5)
+    abline(v= conf_interval[2], col = "red", lty = 5)
+
+      }, res = 120)
+```
+
+## Airline Comparison Chart
+
+```{r}
+#| context: setup
+library(shiny)
+library(RSQLite)
+setwd("C:/Users/78641/Downloads")
+con <- dbConnect(RSQLite::SQLite(), dbname="final_project.db")
+depdelay <- dbGetQuery(con, "
+  SELECT f.airline, f.DepDelay
+  FROM main_data f
+  INNER JOIN (
+    SELECT airline
+    FROM main_data
+    WHERE DepDelay >= -5
+    GROUP BY airline
+    ORDER BY COUNT(*) DESC
+    LIMIT 10
+) top_airlines ON f.airline = top_airlines.airline
+WHERE f.DepDelay >= -5 AND f.airline IN ('Southwest Airlines', 'American Airlines', 'Delta Air Lines', 'United Airlines', 'US Airways', 'Continental Airlines')
+  ")
+
+library(readxl)
+rating <- read_excel("C:/Users/78641/Downloads/rating.xlsx")
+```
+
+```{r}
+#| panel: fill
+plotOutput('plot')
+```
+
+::: {style="font-size: 40%"}
+```{r}
+selectInput("airline1", "Select the first Airline Company:", choices = unique(depdelay$airline))
+selectInput("airline2", "Select the second Airline Company:", choices = unique(depdelay$airline))
+```
+:::
+
+```{r}
+#| context: server
+  library(dplyr)
+  library(grid)
+  
+  filtered_data_1 <- reactive({
+  filter(depdelay, airline == input$airline1)
+  
+})
+
+
+  filtered_data_2 <- reactive({
+    filter(depdelay, airline == input$airline2)
+  })
+  
+  fl_data1 <- reactive({
+    filter(rating, airline_name == input$airline1)
+  })
+  
+  fl_data2 <- reactive({
+    filter(rating, airline_name == input$airline2)
+  })
+  
+  # Render the plot
+      output$plot <- renderPlot({
+
+        n1 <- round(mean(filtered_data_1()$DepDelay), 0)
+        n2 <- round(mean(filtered_data_2()$DepDelay), 0)
+        
+        var1 <- var(filtered_data_1()$DepDelay) / 10000
+        var2 <- var(filtered_data_2()$DepDelay) / 10000
+        
+        s1 <- round(mean(fl_data1()$seat_comfort_rating), 0)
+        s2 <- round(mean(fl_data2()$seat_comfort_rating), 0)
+        
+        c1 <- round(mean(fl_data1()$cabin_staff_rating), 0)
+        c2 <- round(mean(fl_data2()$cabin_staff_rating), 0)
+        
+        o1 <- round(mean(fl_data1()$overall_rating), 0)
+        o2 <- round(mean(fl_data2()$overall_rating), 0)
+        
+        library(grid)
+grid.newpage()
+x_coords <- c(0.1, 0.1, 0.2, 
+              0.015 * n1 + 0.158, 0.015 * n1 + 0.058, 0.015 * n1 + 0.208, 0.015 * n1 + 0.258, 
+              0.03 * n1 + 0.215, 0.03 * n1 + 0.215, 
+              0.015 * n1 + 0.258, 0.015 * n1 + 0.208, 0.015 * n1 + 0.058, 0.015 * n1 + 0.158, 
+              0.2, 0.1)
+y_coords <- c(0.95, 0.55, 0.65, 
+              0.65, 0.55, 0.6, 0.65, 
+              0.65, 0.85, 
+              0.85, 0.9, 0.95, 0.85, 
+              0.85, 0.95)
+grid.path(x = x_coords, y = y_coords)
+
+
+
+center_x <- 0.03 * n1 + 0.215
+center_y <- 0.75
+t <- seq(pi/2, -pi/2, length.out = 100)  
+x <- center_x + var1 / 2 * cos(t)            
+y <- center_y + 0.1 * sin(t)            
+
+grid.polygon(x, y, gp = gpar(fill = "lightblue", col = NA))
+
+xs <- seq(from = 0.215, by = 0.03, length.out = n1)
+for (i in xs) {
+  x_coords <- c(i, i, i + 0.015, i + 0.015, i)
+  y_coords <- c(0.77, 0.73, 0.73, 0.77, 0.77)
+  grid.path(x = x_coords, y = y_coords, gp = gpar(fill = "grey"))
+}
+grid.lines(x = c(0.03 * n1 + 0.215, 0.03 * n1 + 0.215), y = c(0.85, 0.65), gp = gpar(col = "white"))
+
+ss <- seq(from = 0.6, by = 0.01, length.out = s1)
+for (i in ss) {
+  x_coords <- c(i + 0.015 * n1 - 0.492, i + 0.015 * n1 - 0.392)
+  y_coords <- c(i, i)
+  grid.path(x = x_coords, y = y_coords, gp = gpar(col = "orange"))
+}
+
+cs <- seq(from = 0.9, by = -0.01, length.out = c1)
+for (i in cs) {
+  x_coords <- c(0.015 * n1 + 1.108 - i, 0.015 * n1 + 1.008 - i)
+  y_coords <- c(i, i)
+  grid.path(x = x_coords, y = y_coords, gp = gpar(col = "red"))
+}
+
+os <- seq(from = 0.83, by = -0.03, length.out = o1)
+for (i in os){
+  grid.circle(x = 0.125, y = i, r = 0.01, gp = gpar(fill = "red"))
+}
+# second
+x_coords <- c(0.1, 0.1, 0.2, 
+              0.015 * n2 + 0.158, 0.015 * n2 + 0.058, 0.015 * n2 + 0.208, 0.015 * n2 + 0.258, 
+              0.03 * n2 + 0.215, 0.03 * n2 + 0.215, 
+              0.015 * n2 + 0.258, 0.015 * n2 + 0.208, 0.015 * n2 + 0.058, 0.015 * n2 + 0.158, 
+              0.2, 0.1)
+y_coords <- c(0.45, 0.05, 0.15, 
+              0.15, 0.05, 0.1, 0.15, 
+              0.15, 0.35, 
+              0.35, 0.4, 0.45, 0.35, 
+              0.35, 0.45)
+grid.path(x = x_coords, y = y_coords)
+
+
+
+center_x <- 0.03 * n2 + 0.215
+center_y <- 0.25
+t <- seq(pi/2, -pi/2, length.out = 100)  
+x <- center_x + var2 / 2 * cos(t)            
+y <- center_y + 0.1 * sin(t)            
+
+grid.polygon(x, y, gp = gpar(fill = "lightblue", col = NA))
+
+xs <- seq(from = 0.215, by = 0.03, length.out = n2)
+for (i in xs) {
+  x_coords <- c(i, i, i + 0.015, i + 0.015, i)
+  y_coords <- c(0.27, 0.23, 0.23, 0.27, 0.27)
+  grid.path(x = x_coords, y = y_coords, gp = gpar(fill = "grey"))
+}
+grid.lines(x = c(0.03 * n2 + 0.215, 0.03 * n2 + 0.215), y = c(0.35, 0.15), gp = gpar(col = "white"))
+
+ss <- seq(from = 0.1, by = 0.01, length.out = s2)
+for (i in ss) {
+  x_coords <- c(i + 0.015 * n2 + 0.108, i + 0.015 * n2 + 0.008)
+  y_coords <- c(i, i)
+  grid.path(x = x_coords, y = y_coords, gp = gpar(col = "orange"))
+}
+
+cs <- seq(from = 0.4, by = -0.01, length.out = c2)
+for (i in cs) {
+  x_coords <- c(0.015 * n2 + 0.608 - i, 0.015 * n2 + 0.508 - i)
+  y_coords <- c(i, i)
+  grid.path(x = x_coords, y = y_coords, gp = gpar(col = "red"))
+}
+os <- seq(from = 0.33, by = -0.03, length.out = o2)
+for (i in os){
+  grid.circle(x = 0.125, y = i, r = 0.01, gp = gpar(fill = "red"))
+}
+
+      }, res = 120)
+
+```
