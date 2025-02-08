@@ -36,13 +36,6 @@ This class project analyzes U.S. flight data by:
 - `killer plot.qmd`  
   A Quarto document with interactive Shiny plots for further data exploration and airline comparison.
 
-- **Data Files** (please place these in the correct folder as specified in the code):
-  - `final_project.db`: The SQLite database containing the flight data and customer reviews.
-  - `rating.xlsx`: An Excel file containing airline ratings.
-
-- (Optional) `styles.css`  
-  A CSS file to customize the appearance of the Quarto slides.
-
 ## Requirements
 
 - **R Version**: R 4.0.0 or higher
