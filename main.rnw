@@ -1,4 +1,5 @@
 \documentclass{beamer}
+% Load required packages for figures, spacing, math, hyperlinks, etc.
 \usepackage{graphicx}
 \usepackage{setspace}
 \usepackage{amsmath}
@@ -6,51 +7,64 @@
 \usepackage{float}
 \usepackage{xcolor}
 
-
+% Set the title and date for the presentation
 \title{Analysis of U.S. Flight Data from January-April 2008}
-\author{Gourp members: Yixuan Liu, Zhikang Liu, Yunke Wan, Katherine Cheng}
 \date{\today}
 
 \begin{document}
 
-
+% Title page frame
 \frame{\titlepage}
 
-<<echo=FALSE,message=FALSE,fig.width=8,fig.height=4,warning=FALSE>>=
-#Set up active libraries:
+%======================================================================
+% First code chunk: Set up libraries and connection to the SQLite database
+%======================================================================
+<<echo=FALSE, message=FALSE, fig.width=8, fig.height=4, warning=FALSE>>=
+# Define a function to load required libraries
 run_libraries <- function(){
   library(RSQLite)
   library(ggplot2)
   library(dplyr)
 }
+# Suppress messages when loading libraries
 suppressMessages(run_libraries())
 
-#Change for each computer!
+# Set the working directory (change this path as needed on each computer)
 setwd("C:/Users/78641/Downloads")
 
-#SQL Server setup
+# Establish a connection to the SQLite database "final_project.db"
 con <- dbConnect(RSQLite::SQLite(), dbname="final_project.db")
-#dbListTables(con)
-#dbListFields(con, "main_data") 
+# Uncomment the next lines to inspect the database tables and fields:
+# dbListTables(con)
+# dbListFields(con, "main_data") 
 @
 
-<<echo=FALSE,message=FALSE,fig.width=8,fig.height=4,warning=FALSE>>=
+%======================================================================
+% Second code chunk: Query and clean the flight data
+%======================================================================
+<<echo=FALSE, message=FALSE, fig.width=8, fig.height=4, warning=FALSE>>=
 library(dplyr)
 library(ggplot2)
 library(RSQLite)
 library(stringr)
 library(nortest)
 library(MASS)
-## notice setwd! notice setwd! notice setwd!
+## IMPORTANT: Make sure you set the working directory correctly!
 
-Query_data="SELECT Origin,Dest,Deptime,DepDelay,airline
+# Define an SQL query to retrieve selected columns from "main_data"
+Query_data="SELECT Origin, Dest, Deptime, DepDelay, airline
             FROM main_data"
-#WHERE Origin IN ('SGU','PSC','RAP','IPL','SUN')
-result= dbGetQuery(con, Query_data)
+# Execute the query and store the result in 'result'
+result = dbGetQuery(con, Query_data)
 
-result= na.omit(result)
+# Remove any rows with missing values
+result = na.omit(result)
 @
 
+%======================================================================
+% Frame: Category
+% This slide lists the parts of the analysis
+%======================================================================
 \begin{frame}{Category}
 \setstretch{1.5}
 \Large{{\textbf{Part1: Introduction}}}\\[0.5cm] 
@@ -59,6 +73,9 @@ result= na.omit(result)
 \setstretch{1}
 \end{frame}
 
+%======================================================================
+% Frame: Introduction slide with problem overview
+%======================================================================
 \begin{frame}
 \frametitle{Introduction}
 Problem Overview:\\
@@ -67,7 +84,10 @@ Problem Overview:\\
 (3) How do delays impact customer satisfaction across American companies as well as international airports and airlines?\\
 \end{frame}
 
-
+%======================================================================
+% Frame: Description of Dataset
+% This slide presents a table with the dataset’s variables and their descriptions.
+%======================================================================
 \begin{frame}{Description of Dataset}
 \begin{table}
   \centering
@@ -98,60 +118,76 @@ Problem Overview:\\
 \end{table}
 \end{frame}
 
-
+%======================================================================
+% Frame: 2a – Lollipop Chart for Delay Categories
+% This chunk queries the database for counts of different delay types and creates a lollipop chart.
+%======================================================================
 \begin{frame}{2a}
 \frametitle{Categories of Delay}
 \begin{figure}
-<<echo=FALSE,message=FALSE,fig.width=8,fig.height=4,warning=FALSE>>=
-# Create SQL queries to count delays
+<<echo=FALSE, message=FALSE, fig.width=8, fig.height=4, warning=FALSE>>=
+# Create SQL queries to count the number of occurrences for each delay type.
 query_carrier <- "SELECT CarrierDelay, COUNT(*) FROM main_data WHERE CarrierDelay IS NOT NULL AND CarrierDelay != 0"
 query_weather <- "SELECT WeatherDelay, COUNT(*) FROM main_data WHERE WeatherDelay IS NOT NULL AND WeatherDelay != 0"
 query_nas <- "SELECT NASDelay, COUNT(*) FROM main_data WHERE NASDelay IS NOT NULL AND NASDelay != 0"
 query_security <- "SELECT SecurityDelay, COUNT(*) FROM main_data WHERE SecurityDelay IS NOT NULL AND SecurityDelay != 0"
 query_late_aircraft <- "SELECT LateAircraftDelay, COUNT(*) FROM main_data WHERE LateAircraftDelay IS NOT NULL AND LateAircraftDelay != 0"
 
-# Execute queries
+# Execute the queries and convert the counts to numeric values.
 count_Carrier <- as.numeric(dbGetQuery(con, query_carrier))
 count_Weather <- as.numeric(dbGetQuery(con, query_weather))
 count_NAS <- as.numeric(dbGetQuery(con, query_nas))
 count_Security <- as.numeric(dbGetQuery(con, query_security))
 count_LateAircraft <- as.numeric(dbGetQuery(con, query_late_aircraft))
 
-c<-c(count_Carrier[2], count_LateAircraft[2], count_NAS[2], count_Security[2],count_Weather[2])
+# Combine the counts into a vector in a specific order.
+c <- c(count_Carrier[2], count_LateAircraft[2], count_NAS[2], count_Security[2], count_Weather[2])
 
-category <- c("Carrier", "LateAircraft", "NAS", "Security","Weather")
+# Define the corresponding delay category names.
+category <- c("Carrier", "LateAircraft", "NAS", "Security", "Weather")
 
+# Create a data frame and arrange it by count.
 data1 <- arrange(data.frame(category, c), c)
 
-lollipops <- ggplot(data1, aes(x=reorder(category, c), y=c)) + 
-  geom_segment(aes(xend=category, yend=0), color="skyblue", linewidth=1.2) + 
-  geom_point(color="dodgerblue", size=3) + 
+# Build a lollipop chart using ggplot2.
+lollipops <- ggplot(data1, aes(x = reorder(category, c), y = c)) + 
+  geom_segment(aes(xend = category, yend = 0), color = "skyblue", linewidth = 1.2) + 
+  geom_point(color = "dodgerblue", size = 3) + 
   theme_minimal() + 
   coord_flip() + 
-  labs(x="", y="Count number of each category") +
-  theme(axis.text.y = element_text(angle = 0, hjust=1), 
+  labs(x = "", y = "Count number of each category") +
+  theme(axis.text.y = element_text(angle = 0, hjust = 1), 
         plot.title.position = "panel", 
-        plot.title = element_text(hjust = 0.5))+
+        plot.title = element_text(hjust = 0.5)) +
   scale_y_continuous(limits = c(0, 350000), breaks = seq(0, 350000, 50000))
+# Print the plot (suppress warnings)
 suppressWarnings(print(lollipops))
 @
 \caption{Lollipop chart on the number of flight delays in five categories}
 \end{figure}
 \end{frame}
 
+%======================================================================
+% Frame: 2b – Density Plot for Departure Delay Analysis (Image Inclusion)
+%======================================================================
 \begin{frame}{2b}
 \frametitle{Departure delay time analysis}
+% Include a pre-generated image "density shiny.png" showing a density plot.
 \includegraphics[width=\textwidth]{density shiny.png}
 \end{frame}
 
-
+%======================================================================
+% Frame: 2b – Departure Delay Analysis with Hex Plot and Robust Regression
+%======================================================================
 \begin{frame}{2b}
 \frametitle{Departure delay time analysis}
 \begin{figure}
-<<echo=FALSE,fig.width=8,fig.height=4,warning=FALSE>>=
+<<echo=FALSE, fig.width=8, fig.height=4, warning=FALSE>>=
+# Load additional libraries and reconnect to the database
 library(ggplot2)
-suppressMessages(library(MASS))
 con <- dbConnect(RSQLite::SQLite(), dbname="final_project.db")
+
+# Run an SQL query to compute average departure delay, total flights, and percentage of delayed flights by Origin.
 res <- dbSendQuery(conn = con, "
                     SELECT Origin, avg(DepDelay) AS Avg_Dep_Delay,
                      count(DepDelay) AS total_flights,
@@ -162,6 +198,7 @@ res <- dbSendQuery(conn = con, "
 DepDelay_airports <- dbFetch(res, -1)
 dbClearResult(res)
 
+# Create a hex plot with robust linear regression (rlm) smoothing.
 plothex2 <- ggplot(DepDelay_airports, aes(x = perc_delayed, y = Avg_Dep_Delay)) +
   geom_hex() + geom_smooth(method = "rlm") +
   xlab("% of All Outbound Flights Delayed") + ylab("Average Dep. Delay")
@@ -171,88 +208,106 @@ suppressMessages(suppressWarnings(print(plothex2)))
 \end{figure}
 \end{frame}
 
+%======================================================================
+% Frame: 2b – On-Time Performance Table for Airlines
+%======================================================================
 \begin{frame}{2b}
 \frametitle{Departure delay time analysis}
 \begin{table}
-<<echo=FALSE,message=FALSE,fig.width=8,fig.height=4,warning=FALSE>>=
+<<echo=FALSE, message=FALSE, fig.width=8, fig.height=4, warning=FALSE>>=
+# Load libraries for table generation
 library(knitr)
 library(kableExtra)
-level_3= levels(factor(result$airline))
-select_com= function(data,level){
-  c= list()
+
+# Get the unique levels of the 'airline' factor.
+level_3 = levels(factor(result$airline))
+
+# Define a function to split data by airline.
+select_com = function(data, level){
+  c = list()
   for (i in 1:length(level)){
-    c[[i]]= data[which(data$airline== level[i]),]
+    c[[i]] = data[which(data$airline == level[i]),]
   }
   return(c)
 }
-get_com= select_com(result,level_3)
+get_com = select_com(result, level_3)
 
-initial= data.frame()
-performance= 0
+initial = data.frame()
+performance = 0
+# For each airline, calculate mean departure delay, variance, and on-time performance.
 for (i in 1:length(level_3)){
-    count=0
-    row= get_com[[i]] %>%
+    count = 0
+    row = get_com[[i]] %>%
          summarize(Dep_mean = mean(DepDelay),
-                   Dep_var= var(DepDelay))
-    build_data= data.frame(airlines=level_3[i])
-    build_data$Dep_mean =row$Dep_mean
-    build_data$Dep_var =row$Dep_var
+                   Dep_var = var(DepDelay))
+    build_data = data.frame(airlines = level_3[i])
+    build_data$Dep_mean = row$Dep_mean
+    build_data$Dep_var = row$Dep_var
   
-    #performance
-    per_data= get_com[[i]]$DepDelay
+    # Calculate on-time performance as the fraction of flights within one standard deviation.
+    per_data = get_com[[i]]$DepDelay
     for (k in 1:length(per_data)){
-    if (abs(per_data[k]-build_data$Dep_mean)<=sqrt(build_data$Dep_var)){
-      count= count+1
+      if (abs(per_data[k] - build_data$Dep_mean) <= sqrt(build_data$Dep_var)){
+        count = count + 1
+      }
     }
-    }
-    performance=count/length(per_data)
-    build_data$on_time_performance= performance
-    initial= bind_rows(initial,build_data)
+    performance = count / length(per_data)
+    build_data$on_time_performance = performance
+    initial = bind_rows(initial, build_data)
 }
 library(xtable)
-initial= initial%>%arrange(desc(on_time_performance))
-names(initial)[4]= "rate"
-initial$Dep_mean = round(initial$Dep_mean,3)
-initial$Dep_var = round(initial$Dep_var,1)
-initial$rate = round(initial$rate,3)
-table_latex <- kable(head(initial, 15), format = "latex") # Print the LaTeX code for the table cat(table_latex)
+# Arrange and format the results table.
+initial = initial %>% arrange(desc(on_time_performance))
+names(initial)[4] = "rate"
+initial$Dep_mean = round(initial$Dep_mean, 3)
+initial$Dep_var = round(initial$Dep_var, 1)
+initial$rate = round(initial$rate, 3)
+table_latex <- kable(head(initial, 15), format = "latex")
 table_latex
 @
-\caption{Rated American air company(on-time performance)}
+\caption{Rated American air company (on-time performance)}
 \end{table}
 \end{frame}
 
+%======================================================================
+% Frame: 2c – Airline Delay Analysis (Image Inclusion)
+%======================================================================
 \begin{frame}{2c}
 \frametitle{Departure delay time analysis}
 \includegraphics[width=\textwidth]{Airline shiny.png}
 \end{frame}
 
+%======================================================================
+% Frame: 2c – U.S. States Map of Departure Delay Times
+%======================================================================
 \begin{frame}{2c}
 \frametitle{Departure delay time analysis}
 \begin{figure}
-\caption{Departure Delay Times in US States}
-<<echo=FALSE,fig.width=8,fig.height=4,warning=FALSE>>=
+<<echo=FALSE, fig.width=8, fig.height=4, warning=FALSE>>=
+# Query average departure delay by state by joining flight data with airport codes.
 ave_delay <- dbGetQuery(con, "
   SELECT AVG(d.delay_time) AS mean_delay, a.state
   FROM (
-  SELECT Origin AS IATA, DepDelay AS delay_time
-  FROM main_data
-  WHERE DepDelay >= -5
+    SELECT Origin AS IATA, DepDelay AS delay_time
+    FROM main_data
+    WHERE DepDelay >= -5
   ) d
   LEFT JOIN (
-  SELECT iata_code AS IATA, region_name AS state
-  FROM airport_codes
+    SELECT iata_code AS IATA, region_name AS state
+    FROM airport_codes
   ) a
   ON d.IATA = a.IATA
   WHERE a.state IS NOT NULL
   GROUP BY a.state
   ")
                         
+# Load libraries for mapping and color scales.
 suppressMessages(library(usmap))
 suppressMessages(library(ggplot2))
-#install.packages("viridis")
 suppressMessages(library(viridis))
 colors <- viridis(3)
+
+% Create a U.S. map plot with average delay times.
 plotmap <- plot_usmap(data = ave_delay, values = "mean_delay") + 
   scale_fill_gradientn(colors = colors,
                        breaks = c(5, 11, 17, 24),
@@ -270,6 +325,9 @@ suppressMessages(suppressWarnings(print(plotmap)))
 \end{itemize}
 \end{frame}
 
+%======================================================================
+% Frame: Section 3 – International Comparisons by Text Analysis
+%======================================================================
 \begin{frame}
 \frametitle{Section 3: International Comparisons by Text Analysis}
 Using 2007-2015 customer reviews scraped from SkyTrax...
@@ -279,6 +337,9 @@ Using 2007-2015 customer reviews scraped from SkyTrax...
 \end{itemize}
 \end{frame}
 
+%======================================================================
+% Frame: Word Frequency Analysis for Airports
+%======================================================================
 \begin{frame}
 First, examined word frequency on reviews that mention delays.
 \begin{itemize}
@@ -287,10 +348,14 @@ First, examined word frequency on reviews that mention delays.
 \end{itemize}
 \end{frame}
 
+%======================================================================
+% Frame: Word Cloud for Airport Reviews (Text Analysis)
+%======================================================================
 \begin{frame}
 \frametitle{Word Frequency: Airports}
 \begin{center}
 <<fig.width=3, fig.height=3, echo=FALSE, warning=FALSE>>=
+# Load libraries required for text mining and word cloud generation.
 run_lib <- function(){
   library(RSQLite)
   library(ggplot2)
@@ -302,8 +367,11 @@ run_lib <- function(){
   library(textdata)
 } 
 suppressWarnings(suppressMessages(run_lib()))
+
+# Connect to the database
 con <- dbConnect(RSQLite::SQLite(), dbname="final_project.db")
 
+% Query airport reviews from the database.
 res <- dbSendQuery(conn = con, "
                     SELECT airport_name as Airport, author_country as Nationality,
                     date_visit as Date, content as Review, overall_rating as Rating
@@ -312,11 +380,11 @@ res <- dbSendQuery(conn = con, "
 reviews <- dbFetch(res, -1)
 dbClearResult(res)
 
+% Filter reviews that mention the word "delay" (case insensitive)
 delay_reviews <- reviews %>%
   filter(str_detect(reviews$Review, "[Dd][Ee][Ll][Aa][Yy]"))
 
-#install.packages("wordcloud")
-#install.packages("tm")
+% Combine and preprocess the text for the word cloud.
 text <- tolower(paste(delay_reviews$Review, collapse = " "))
 corpus <- Corpus(VectorSource(text))
 corpus <- tm_map(corpus, content_transformer(tolower))
@@ -325,13 +393,16 @@ corpus <- tm_map(corpus, removeNumbers)
 corpus <- tm_map(corpus, removeWords, stopwords("en"))
 word_freq <- colSums(as.matrix(DocumentTermMatrix(corpus)))
 top_words <- head(sort(word_freq, decreasing = TRUE), 100)
+% Generate the word cloud.
 wordcloud(words = names(top_words), freq = top_words, random.order = FALSE,
           colors = brewer.pal(8, "Dark2"))
-
 @
 \end{center}
 \end{frame}
 
+%======================================================================
+% Frame: Sentiment Analysis for Airports (Best Results)
+%======================================================================
 \begin{frame}
 \frametitle{Sentiment Analysis: Airports}
 \begin{table}[H]
@@ -366,6 +437,9 @@ wordcloud(words = names(top_words), freq = top_words, random.order = FALSE,
 \end{table}
 \end{frame}
 
+%======================================================================
+% Frame: Sentiment Analysis for Airports (Worst Results)
+%======================================================================
 \begin{frame}
 \frametitle{Sentiment Analysis: Airports}
 \begin{table}[H]
@@ -400,33 +474,9 @@ wordcloud(words = names(top_words), freq = top_words, random.order = FALSE,
 \end{table}
 \end{frame}
 
-
-% \begin{frame}
-% \frametitle{Word Frequency: Airlines}
-% \begin{center}
-% <<fig.width=3, fig.height=3, echo=FALSE, warning=FALSE>>=
-% airline_ratings <- read.csv("airline.csv")
-% 
-% delay_reviews <- airline_ratings[,c("airline_name", "date", "content", "overall_rating")] %>%
-%   filter(str_detect(airline_ratings$content, "[Dd][Ee][Ll][Aa][Yy]"))
-% 
-% #install.packages("wordcloud")
-% #install.packages("tm")
-% text <- tolower(paste(delay_reviews$content, collapse = " "))
-% corpus <- Corpus(VectorSource(text))
-% corpus <- tm_map(corpus, content_transformer(tolower))
-% corpus <- tm_map(corpus, removePunctuation)
-% corpus <- tm_map(corpus, removeNumbers)
-% corpus <- tm_map(corpus, removeWords, stopwords("en"))
-% word_freq <- colSums(as.matrix(DocumentTermMatrix(corpus)))
-% top_words <- head(sort(word_freq, decreasing = TRUE), 100)
-% set.seed(2020)
-% wordcloud(words = names(top_words), freq = top_words, random.order = FALSE, 
-%           colors = brewer.pal(8, "Dark2"))
-% @
-% \end{center}
-% \end{frame}
-
+%======================================================================
+% Frame: Sentiment Analysis for Airlines (Best Results)
+%======================================================================
 \begin{frame}
 \frametitle{Sentiment Analysis: Airlines}
 \begin{table}[ht]
@@ -461,7 +511,11 @@ wordcloud(words = names(top_words), freq = top_words, random.order = FALSE,
 \end{table}
 \end{frame}
 
+%======================================================================
+% Frame: Sentiment Analysis for Airlines (Worst Results)
+%======================================================================
 \begin{frame}
+\frametitle{Sentiment Analysis: Airlines}
 \begin{table}[ht]
 \centering
 \begin{tabular}{rlr}
@@ -494,7 +548,8 @@ wordcloud(words = names(top_words), freq = top_words, random.order = FALSE,
 \end{table}
 \end{frame}
 
-<<echo=FALSE,message=FALSE>>=
+% Disconnect the database connection at the end of the presentation.
+<<echo=FALSE, message=FALSE>>=
 dbDisconnect(con)
 @
 \end{document}
